@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.4;
 
-import "hardhat/console.sol";
+//import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract SpaceCoinICO is ERC20 {
@@ -24,15 +24,16 @@ contract SpaceCoinICO is ERC20 {
     Phase private currentPhase;
     address[] private seedWhitelist;
 
+    // store the total contribution of each person
     mapping (address => uint256) totalInvestmentByUser;
 
     event ChangeICOStage(address indexed _owner, Phase indexed _currentPhase);
     event ToggleTaxFlag(address indexed _owner, bool indexed _canDeductTax);
     event ToggleICOStatus(address indexed _owner, bool indexed _canDeductTax);
     event Transferred(address indexed _sender, address indexed _receiver, uint256 indexed _token);
-    event InvestedInSPX(address indexed _investor, uint256 indexed _amount);
+    event InvestedInSPC(address indexed _investor, uint256 indexed _amount);
 
-    constructor(address payable _treasury, uint256 _startingPrice, address[] memory _seedWhitelist) ERC20("Space Coin", "SPX") {
+    constructor(address payable _treasury, uint256 _startingPrice, address[] memory _seedWhitelist) ERC20("Space Coin", "SPC") {
         owner = msg.sender;
         treasury = _treasury;
         coinPrice = _startingPrice;
@@ -47,32 +48,39 @@ contract SpaceCoinICO is ERC20 {
         _;
     }
 
+    // function to change ICO phase by owner only
     function changeICOStage() external onlyOwner() {
         goToNextStage();
         emit ChangeICOStage(msg.sender, currentPhase);
     }
 
+    // function to change ICO phase automatically by internal method only, no user
     function goToNextStage() internal {
         if(currentPhase == Phase.SEED) {
             currentPhase = Phase.GENERAL;
+            //console.log("GENERAL PHASE");
         } else if(currentPhase == Phase.GENERAL) {
             currentPhase = Phase.OPEN;
             coinPrice = SPX_PRICE_OPEN;
+            //console.log("OPEN PHASE");
         } else {
             // do nothing
         }
     }
 
+    // toggle TAX deduction flag
     function toggleTaxFlag() external onlyOwner() {
         canDeductTax = !canDeductTax;
         emit ToggleTaxFlag(msg.sender, canDeductTax);
     }
 
+    // hold or resume ICO
     function toggleICOStatus() external onlyOwner() {
         resumeICO = !resumeICO;
         emit ToggleICOStatus(msg.sender, resumeICO);
     }
 
+    // transfer SPC to user/ contract
     function transfer(address _to, uint256 _amount) public virtual override returns(bool) {
 
         require(currentPhase == Phase.OPEN, "token cannot be transferred");
@@ -88,12 +96,14 @@ contract SpaceCoinICO is ERC20 {
         return true;
     }
     
-    function investInSPX() public payable {
+    // invest ETH to get SPC token
+    function investInSPC() public payable {
         require(resumeICO, "not ready for sell");
 
         uint256 tokenCount = msg.value / coinPrice;
+        uint256 potentialInvestment = totalInvestmentByUser[msg.sender] + msg.value;
         if(currentPhase == Phase.OPEN) {
-            totalInvestmentByUser[msg.sender] += msg.value;
+            totalInvestmentByUser[msg.sender] = potentialInvestment;
             totalContribution += msg.value;
         } else {
             bool flag = false;
@@ -110,30 +120,26 @@ contract SpaceCoinICO is ERC20 {
 
             require(flag, "not a whitelisted contributor");
             if(currentPhase == Phase.SEED) {
-                require(totalInvestmentByUser[msg.sender] <= INDIV_LIMIT_SEED, "not eligible");
-                totalInvestmentByUser[msg.sender] += msg.value;
+                require(potentialInvestment <= INDIV_LIMIT_SEED, "not eligible");
+                totalInvestmentByUser[msg.sender] = potentialInvestment;
                 totalContribution += msg.value;
                 if(totalContribution >= SEED_GOAL) {
                     goToNextStage();
                 }
             } else {
-                require(totalInvestmentByUser[msg.sender] <= INDIV_LIMIT_GENERAL, "not eligible");
-                totalInvestmentByUser[msg.sender] += msg.value;
+                require(potentialInvestment <= INDIV_LIMIT_GENERAL, "not eligible");
+                totalInvestmentByUser[msg.sender] = potentialInvestment;
                 totalContribution += msg.value;
                 if(totalContribution >= GOAL) {
                     goToNextStage();
                 }
             }
-            _transfer(treasury, msg.sender, tokenCount);
-            emit InvestedInSPX(msg.sender, msg.value);
         }
+        _transfer(treasury, msg.sender, tokenCount);
+        emit InvestedInSPC(msg.sender, msg.value);
     }
 
     receive() external payable {
-        investInSPX();
-    }
-
-    fallback() external {
-        investInSPX();
+        investInSPC();
     }
 }

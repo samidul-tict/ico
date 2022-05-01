@@ -19,114 +19,329 @@ describe("SpaceCoin ICO", function () {
                 addrs[3].address, addrs[4].address, addrs[5].address,
                 addrs[6].address, addrs[7].address, addrs[8].address,
                 addrs[9].address, addrs[10].address];
+
     const spaceCoinICOFactory = await ethers.getContractFactory("SpaceCoinICO");
-    spaceCoinICO = (await spaceCoinICOFactory.connect(owner).deploy(treasury.address, ethers.utils.parseEther("0.001"), whitelist)) as SpaceCoinICO;
+    spaceCoinICO = (await spaceCoinICOFactory.connect(owner).deploy(treasury.address, ethers.utils.parseEther("0.1"), whitelist)) as SpaceCoinICO;
     await spaceCoinICO.deployed();
     console.log("contract address: ", spaceCoinICO.address);
-  });
-  
-  it("allows contributions during seed phase of whitelisted addressed", async function() {
-    await expect(spaceCoinICO.connect(bob).contribute({value:ethers.utils.parseEther("500")}))
-      .to.be.revertedWith("not in seed whitelist");
-    await spaceCoinICO.connect(addrs[0]).contribute({value:ethers.utils.parseEther("500")});
-    expect (await spaceCoinICO.contributions(whitelist[0]))
-      .to.equal(ethers.utils.parseEther("500"))
 
-    await expect(spaceCoinICO.connect(addrs[0]).contribute({value:ethers.utils.parseEther("1000")}))
-      .to.be.revertedWith("reached individual limit");
+    const totalBalance = await spaceCoinICO.connect(owner).balanceOf(treasury.address);
+    console.log("total treasury balance: ", totalBalance);
   });
 
-  it("allows contributions during the general phase from anyone", async function() {
-    await spaceCoinICO.connect(owner).advancePhase();
-    await spaceCoinICO.connect(bob).contribute({value:ethers.utils.parseEther("500")});
-    await expect(spaceCoinICO.connect(bob).contribute({value:ethers.utils.parseEther("500")}))
-      .to.be.revertedWith("reached individual limit");
+  describe("toggle tax flag", function () {
+    it("toggle tax flag, by owner", async function() {
+      const unresolvedReceipt = await spaceCoinICO.connect(owner).toggleTaxFlag();
+      const resolvedReceipt = await unresolvedReceipt.wait();
+      const event = resolvedReceipt.events?.find(event => event.event === "ToggleTaxFlag");
+      const argsList = event?.args?.slice().pop();
+      console.log("current tax flag: ", argsList);
+
+      const unresolvedReceipt1 = await spaceCoinICO.connect(owner).toggleTaxFlag();
+      const resolvedReceipt1 = await unresolvedReceipt1.wait();
+      const event1 = resolvedReceipt1.events?.find(event => event.event === "ToggleTaxFlag");
+      const argsList1 = event1?.args?.slice().pop();
+      console.log("tax flag after change: ", argsList1);
+    });
+    it("toggle tax flag, by someone other than owner", async function() {
+      await expect(spaceCoinICO.connect(alice).toggleTaxFlag()).to.be.revertedWith("not a valid owner");
+    });
   });
 
-  it("allows the owner to advance the phases", async function() {
-    await spaceCoinICO.connect(owner).advancePhase();
-    expect (await spaceCoinICO.currentPhase())
-      .to.equal(1)
-    await spaceCoinICO.connect(owner).advancePhase();
-    expect (await spaceCoinICO.currentPhase())
-      .to.equal(2)
-  })
+  describe("toggle ico status", function () {
+    it("toggle ico status, by owner", async function() {
+      const unresolvedReceipt = await spaceCoinICO.connect(owner).toggleICOStatus();
+      const resolvedReceipt = await unresolvedReceipt.wait();
+      const event = resolvedReceipt.events?.find(event => event.event === "ToggleICOStatus");
+      const argsList = event?.args?.slice().pop();
+      //const argsList = event?.args?.values().next().value;
+      console.log("current ico status: ", argsList);
 
-  it("allows open phase contributions and immediately transfers coins -- NO TAX", async function() {
-    await spaceCoinICO.connect(owner).advancePhase();
-    await spaceCoinICO.connect(owner).advancePhase();
-    await spaceCoinICO.connect(bob).contribute({value:ethers.utils.parseEther("500")});
-    expect (await spaceCoinICO.balanceOf(bob.address)).to.equal(500*5);
+      const unresolvedReceipt1 = await spaceCoinICO.connect(owner).toggleICOStatus();
+      const resolvedReceipt1 = await unresolvedReceipt1.wait();
+      const event1 = resolvedReceipt1.events?.find(event => event.event === "ToggleICOStatus");
+      const argsList1 = event1?.args?.slice().pop();
+      console.log("ico status after change: ", argsList1);
+    });
+    it("toggle ico status, by someone other than owner", async function() {
+      await expect(spaceCoinICO.connect(alice).toggleICOStatus()).to.be.revertedWith("not a valid owner");
+    });
   });
 
-  it("mints seed contributions when phase open begins -- NO TAX", async function() {
-    await spaceCoinICO.connect(addrs[0]).contribute({value:ethers.utils.parseEther("500")});
-    await spaceCoinICO.connect(owner).advancePhase();
-    await spaceCoinICO.connect(owner).advancePhase();
-    expect (await spaceCoinICO.balanceOf(whitelist[0])).to.equal(500*5);
+  describe("change ico phase", function () {
+    it("change ico phase, by owner", async function() {
+      const unresolvedReceipt = await spaceCoinICO.connect(owner).changeICOStage();
+      const resolvedReceipt = await unresolvedReceipt.wait();
+      const event = resolvedReceipt.events?.find(event => event.event === "ChangeICOStage");
+      const argsList = event?.args?.slice().pop();
+      console.log("ico phase after first change [expected GENERAL i.e. 1]: ", argsList);
+
+      const unresolvedReceipt1 = await spaceCoinICO.connect(owner).changeICOStage();
+      const resolvedReceipt1 = await unresolvedReceipt1.wait();
+      const event1 = resolvedReceipt1.events?.find(event => event.event === "ChangeICOStage");
+      const argsList1 = event1?.args?.slice().pop();
+      console.log("ico phase after second change [expected OPEN i.e. 2]: ", argsList1);
+
+      const unresolvedReceipt2 = await spaceCoinICO.connect(owner).changeICOStage();
+      const resolvedReceipt2 = await unresolvedReceipt2.wait();
+      const event2 = resolvedReceipt2.events?.find(event => event.event === "ChangeICOStage");
+      const argsList2 = event2?.args?.slice().pop();
+      console.log("ico phase after third change [expected OPEN i.e. 2]: ", argsList2);
+    });
+    it("change ico phase, by someone other than owner", async function() {
+      await expect(spaceCoinICO.connect(alice).changeICOStage()).to.be.revertedWith("not a valid owner");
+    });
   });
 
-  it("mints general phase contributions when phase open begins -- NO TAX", async function() {
-    await spaceCoinICO.connect(owner).advancePhase();
-    await spaceCoinICO.connect(bob).contribute({value:ethers.utils.parseEther("500")});
-    await spaceCoinICO.connect(owner).advancePhase();
-    expect (await spaceCoinICO.balanceOf(bob.address)).to.equal(500*5);
-  });
-
-  it("respect total contribution limits at each phase", async function() {
-    for (var i = 0 ;i < 10; i++) {
-      await spaceCoinICO.connect(addrs[i]).contribute({value:ethers.utils.parseEther("1499")});
-    }
-    await expect(spaceCoinICO.connect(addrs[10]).contribute({value:ethers.utils.parseEther("500")}))
-      .to.be.revertedWith("reached phase limit");
+  describe("transfer token", function () {
+    describe("transfer during SEED phase", function () {
+      it("transfer by owner", async function() {
+        await expect(spaceCoinICO.connect(owner).transfer(alice.address, 50)).to.be.revertedWith("token cannot be transferred");
+      });
+      it("transfer by someone other than owner", async function() {
+        await expect(spaceCoinICO.connect(alice).transfer(bob.address, 50)).to.be.revertedWith("token cannot be transferred");
+      });
+    });
     
-    await spaceCoinICO.connect(owner).advancePhase();
+    describe("transfer during GENERAL phase", function () {
+      it("transfer by owner", async function() {
+        // move to GENERAL phase
+        await spaceCoinICO.connect(owner).changeICOStage();
+        await expect(spaceCoinICO.connect(owner).transfer(alice.address, 50)).to.be.revertedWith("token cannot be transferred");
+      });
+      it("transfer by someone other than owner", async function() {
+        // move to GENERAL phase
+        await spaceCoinICO.connect(owner).changeICOStage();
+        await expect(spaceCoinICO.connect(alice).transfer(bob.address, 50)).to.be.revertedWith("token cannot be transferred");
+      });
+    });
+    describe("transfer during OPEN phase, no TAX", function () {
+      it("transfer by someone who has balance", async function() {
+        // move to GENERAL phase
+        await spaceCoinICO.connect(owner).changeICOStage();
+        // move to OPEN phase
 
-    for (var i = 10; i < 25; i++) {
-      await spaceCoinICO.connect(addrs[i]).contribute({value:ethers.utils.parseEther("999")});
-    }
+        const totalBalance = await spaceCoinICO.connect(owner).balanceOf(alice.address);
+        console.log("alice's total balance before transfer: ", totalBalance);
 
-    await expect(spaceCoinICO.connect(addrs[25]).contribute({value:ethers.utils.parseEther("500")}))
-      .to.be.revertedWith("reached phase limit");
-    
-    await spaceCoinICO.connect(owner).advancePhase();
+        await spaceCoinICO.connect(treasury).transfer(alice.address, 50);
+        const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(alice.address);
+        console.log("alice's total balance after transfer: ", totalBalance1);
 
-    await spaceCoinICO.connect(addrs[25]).contribute({value:ethers.utils.parseEther("70024")})
-    await expect(spaceCoinICO.connect(addrs[25]).contribute({value:ethers.utils.parseEther("1")}))
-      .to.be.revertedWith("max supply reached");
-    
+        const totalBalance2 = await spaceCoinICO.connect(owner).balanceOf(treasury.address);
+        console.log("total treasury balance after transfer: ", totalBalance2);
+      });
+      it("transfer by someone who doesn't have balance", async function() {
+        // move to GENERAL phase
+        await spaceCoinICO.connect(owner).changeICOStage();
+        // move to OPEN phase
+        await expect(spaceCoinICO.connect(bob).transfer(alice.address, 50)).to.be.revertedWith("not enough balance");
+      });
+    });
+    describe("transfer during OPEN phase, with TAX deduction", function () {
+      it("transfer by someone who has balance", async function() {
+        // move to GENERAL phase
+        await spaceCoinICO.connect(owner).changeICOStage();
+        // move to OPEN phase
+        await spaceCoinICO.connect(owner).changeICOStage();
+        // enabled TAX
+
+        const totalBalance = await spaceCoinICO.connect(owner).balanceOf(alice.address);
+        console.log("alice's total balance before transfer: ", totalBalance);
+
+        await spaceCoinICO.connect(treasury).transfer(alice.address, 100);
+        const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(alice.address);
+        console.log("alice's total balance after transfer: ", totalBalance1);
+
+        const totalBalance2 = await spaceCoinICO.connect(owner).balanceOf(treasury.address);
+        console.log("total treasury balance after transfer: ", totalBalance2);
+      });
+      it("transfer by someone who doesn't have balance", async function() {
+        // move to GENERAL phase
+        await spaceCoinICO.connect(owner).changeICOStage();
+        // move to OPEN phase
+        await spaceCoinICO.connect(owner).changeICOStage();
+        // enabled TAX
+
+        await spaceCoinICO.connect(owner).toggleTaxFlag();
+        await expect(spaceCoinICO.connect(bob).transfer(alice.address, 100)).to.be.revertedWith("not enough balance");
+      });
+    });
   });
 
-  it("calculates tax correctly", async function() {
-    await spaceCoinICO.connect(owner).setTaxEnabled(true);
-    await spaceCoinICO.connect(owner).advancePhase();
-    await spaceCoinICO.connect(owner).advancePhase();
-    await spaceCoinICO.connect(bob).contribute({value:ethers.utils.parseEther("500")});
-    await spaceCoinICO.connect(bob).transfer(alice.address, 2500);
-    expect (await spaceCoinICO.balanceOf(bob.address)).to.equal(0);
-    expect (await spaceCoinICO.balanceOf(alice.address)).to.equal(2500 * 0.98);
-    expect (await spaceCoinICO.balanceOf(treasury.address)).to.equal(2500 * 0.02);
-  });
+  describe("invest in spc", function () {
+    describe("invest when on hold", function () {
+      it("invest by whitelisted person", async function() {
+        // put ICO on hold
+        await spaceCoinICO.connect(owner).toggleICOStatus();
+        await expect(spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("1")})).to.be.revertedWith("not ready for sell");
+      });
+      it("invest by not whitelisted person", async function() {
+        // put ICO on hold
+        await spaceCoinICO.connect(owner).toggleICOStatus();
+        await expect(spaceCoinICO.connect(alice).investInSPC({value:ethers.utils.parseEther("1")})).to.be.revertedWith("not ready for sell");
+      });
+    });
+    describe("invest when not on hold", function () {
+      describe("invest by a whitelisted person", function () {
+        it("via investInSPC() function", async function() {
+          const totalBalance = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance before invest: ", totalBalance);
 
-  it("allows owner to withdraw in open phase", async function() {
-    await spaceCoinICO.connect(addrs[0]).contribute({value:ethers.utils.parseEther("500")});
-    await expect(spaceCoinICO.connect(bob).withdrawFunds(ethers.utils.parseEther("500")))
-      .to.be.revertedWith("not owner");
-      await expect(spaceCoinICO.connect(owner).withdrawFunds(ethers.utils.parseEther("500")))
-      .to.be.revertedWith("not Open Phase");
-    await spaceCoinICO.connect(owner).advancePhase();
-    await expect(spaceCoinICO.connect(owner).withdrawFunds(ethers.utils.parseEther("500")))
-      .to.be.revertedWith("not Open Phase");
+          await spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("1")});
+          const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance before invest: ", totalBalance1);
 
-    await spaceCoinICO.connect(owner).advancePhase();
-    await expect(spaceCoinICO.connect(owner).withdrawFunds(ethers.utils.parseEther("600")))
-      .to.be.revertedWith("not enough funds");
+          const totalBalance2 = await spaceCoinICO.connect(owner).balanceOf(treasury.address);
+          console.log("total treasury balance after addrs[0]'s invest: ", totalBalance2);
+        });
+        it("via receive() function", async function() {
+          const totalBalance = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance before invest: ", totalBalance);
 
-    const ownerBeforeAmount = await ethers.provider.getBalance(owner.address);
-    await spaceCoinICO.connect(owner).withdrawFunds(ethers.utils.parseEther("500"));
-    const ownerAfterAmount = await ethers.provider.getBalance(owner.address);
-    expect(ownerAfterAmount.sub(ownerBeforeAmount)).to.be.below(ethers.utils.parseEther("500"));
-    expect(ownerAfterAmount.sub(ownerBeforeAmount)).to.be.above(ethers.utils.parseEther("499.99"));
+          const tx = {
+            to: spaceCoinICO.address,
+            value: ethers.utils.parseEther("10.0")
+          }
+          await addrs[0].sendTransaction(tx);
+          const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after invest: ", totalBalance1);
 
+          const totalBalance2 = await spaceCoinICO.connect(owner).balanceOf(treasury.address);
+          console.log("total treasury balance after addrs[0]'s invest: ", totalBalance2);
+        });
+        it("a person who reached INDIV_LIMIT_SEED", async function() {
+          const totalBalance = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance before invest: ", totalBalance);
+
+          await spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("1000")});
+          const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after first invest: ", totalBalance1);
+
+          await spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("500")});
+          const totalBalance2 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after second invest: ", totalBalance2);
+
+          await expect(spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("500")})).to.be.revertedWith("not eligible");
+          const totalBalance3 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after third invest: ", totalBalance3);
+        });
+        it("a person who reached INDIV_LIMIT_GENERAL", async function() {
+          // move to GENERAL phase
+          await spaceCoinICO.connect(owner).changeICOStage();
+
+          const totalBalance = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance before invest: ", totalBalance);
+
+          await spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("1000")});
+          const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after first invest: ", totalBalance1);
+
+          await expect(spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("500")}))
+          .to.be.revertedWith("not eligible");
+          const totalBalance2 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after second invest: ", totalBalance2);
+        });
+        it("a who reached INDIV_LIMIT_SEED and then trying again in GENERAL stage", async function() {
+          const totalBalance = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance before invest: ", totalBalance);
+
+          await spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("1500")});
+          const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after first invest: ", totalBalance1);
+          
+          // move to GENERAL phase
+          await spaceCoinICO.connect(owner).changeICOStage();
+          
+          await expect(spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("500")}))
+          .to.be.revertedWith("not eligible");
+          const totalBalance2 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after second invest: ", totalBalance2);
+        });
+        it("a person who reached INDIV_LIMIT_SEED and then trying again in OPEN stage", async function() {
+          const totalBalance = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance before invest: ", totalBalance);
+
+          await spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("1500")});
+          const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after first invest: ", totalBalance1);
+          
+          // move to GENERAL phase
+          await spaceCoinICO.connect(owner).changeICOStage();
+          
+          await expect(spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("500")}))
+          .to.be.revertedWith("not eligible");
+          const totalBalance2 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after second invest: ", totalBalance2);
+
+          // move to OPEN phase
+          await spaceCoinICO.connect(owner).changeICOStage();
+
+          await spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("10")});
+          const totalBalance3 = await spaceCoinICO.connect(owner).balanceOf(addrs[0].address);
+          console.log("addrs[0]'s total balance after third invest: ", totalBalance3);
+        });
+        it("change ICO phase automatically to GENERAL via invesment", async function() {
+          await spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[1]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[2]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[3]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[4]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[5]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[6]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[7]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[8]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[9]).investInSPC({value:ethers.utils.parseEther("1500")});
+          await spaceCoinICO.connect(addrs[10]).investInSPC({value:ethers.utils.parseEther("1000")});
+        });
+        it("change ICO phase automatically to OPEN via invesment", async function() {
+          // move to GENERAL phase
+          await spaceCoinICO.connect(owner).changeICOStage();
+
+          await spaceCoinICO.connect(addrs[0]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[1]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[2]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[3]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[4]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[5]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[6]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[7]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[8]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[9]).investInSPC({value:ethers.utils.parseEther("1000")});
+          await spaceCoinICO.connect(addrs[10]).investInSPC({value:ethers.utils.parseEther("1000")});
+          // need to add another 20 to reach the GOAL
+        });
+      });
+      describe("invest by not a whitelisted person", function () {
+        it("during SEED/ GENERAL phase", async function() {
+          const totalBalance = await spaceCoinICO.connect(owner).balanceOf(alice.address);
+          console.log("alice's total balance before invest: ", totalBalance);
+
+          await expect(spaceCoinICO.connect(alice).investInSPC({value:ethers.utils.parseEther("1")})).to.be.revertedWith("not a whitelisted contributor");
+          const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(alice.address);
+          console.log("alice's total balance after invest during SEED phase: ", totalBalance1);
+
+          // move to GENERAL phase
+          await spaceCoinICO.connect(owner).changeICOStage();
+
+          await expect(spaceCoinICO.connect(alice).investInSPC({value:ethers.utils.parseEther("1")})).to.be.revertedWith("not a whitelisted contributor");
+          const totalBalance2 = await spaceCoinICO.connect(owner).balanceOf(alice.address);
+          console.log("alice's total balance after invest during GENERAL phase: ", totalBalance2);
+        });
+        it("during OPEN phase", async function() {
+          const totalBalance = await spaceCoinICO.connect(owner).balanceOf(alice.address);
+          console.log("alice's total balance before invest: ", totalBalance);
+
+          // move to GENERAL phase
+          await spaceCoinICO.connect(owner).changeICOStage();
+          // move to OPEN phase
+          await spaceCoinICO.connect(owner).changeICOStage();
+
+          await spaceCoinICO.connect(alice).investInSPC({value:ethers.utils.parseEther("1000")});
+          const totalBalance1 = await spaceCoinICO.connect(owner).balanceOf(alice.address);
+          console.log("alice's total balance after invest during OPEN phase: ", totalBalance1);
+        });
+      });
+    });
   });
 });
