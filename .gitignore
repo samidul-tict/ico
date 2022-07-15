@@ -3,6 +3,9 @@ node_modules
 coverage
 coverage.json
 typechain
+frontend/.parcel-cache
+frontend/node_modules
+frontend/dist
 
 #Hardhat files
 cache

@@ -6,6 +6,11 @@
 import { ethers } from "hardhat";
 
 async function main() {
+
+  const [owner] = await ethers.getSigners();
+  const [treasury] = await ethers.getSigners();
+  const whitelist = [owner.address];
+
   // Hardhat always runs the compile task when running scripts with its command
   // line interface.
   //
@@ -14,12 +19,13 @@ async function main() {
   // await hre.run('compile');
 
   // We get the contract to deploy
-  const SpaceCoinICO = await ethers.getContractFactory("SpaceCoinICO");
-  const spaceCoinICO = await SpaceCoinICO.deploy("0x02816799D8f93E24308B2760E2dC861B059F411e", ["0x02816799D8f93E24308B2760E2dC861B059F411e"]);
+  const spaceCoinICOFactory = await ethers.getContractFactory("SpaceCoinICO");
+  const spaceCoinICO = await spaceCoinICOFactory.deploy(treasury.address, whitelist);
 
   await spaceCoinICO.deployed();
-
-  console.log("SpaceCoin deployed to:", spaceCoinICO.address);
+  console.log("Owner address: ", owner.address);
+  console.log("Treasury address: ", treasury.address);
+  console.log("Space Coin ICO deployed to: ", spaceCoinICO.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
